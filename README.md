@@ -477,8 +477,8 @@ Make sure you have the following installed on your machine:
 
 ### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/nawalkant145/ECOMMERCE-BACKEND-COMPLETE-CODE.git
-cd ECOMMERCE-BACKEND-COMPLETE-CODE
+git clone https://github.com/nawalkant145/shopnexa-ai-ecommerce.git
+cd shopnexa-ai-ecommerce
 ```
 
 ---
@@ -660,7 +660,7 @@ npm run dev
 
 **Nawal Kant**
 - **GitHub**: [@nawalkant145](https://github.com/nawalkant145)
-- **Repository**: [ShopNexa E-Commerce](https://github.com/nawalkant145/ECOMMERCE-BACKEND-COMPLETE-CODE)
+- **Repository**: [ShopNexa E-Commerce](https://github.com/nawalkant145/shopnexa-ai-ecommerce)
 - **Email**: [nawalcoder@gmail.com](mailto:nawalcoder@gmail.com)
 - **LinkedIn**: [Nawal Kant | LinkedIn](https://www.linkedin.com/in/nawal-kant-30b694281/?isSelfProfile=true)
 
