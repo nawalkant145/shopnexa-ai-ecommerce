@@ -36,6 +36,24 @@ export const placeOrder = createAsyncThunk(
   }
 );
 
+// ✅ Cancel an order
+export const cancelMyOrder = createAsyncThunk(
+  "order/cancel",
+  async (orderId, thunkAPI) => {
+    try {
+      const res = await axiosInstance.put(`/order/cancel/${orderId}`);
+      toast.success(res.data.message || "Order cancelled successfully!");
+      thunkAPI.dispatch(fetchMyOrders());
+      return res.data.order;
+    } catch (error) {
+      const message =
+        error.response?.data?.message || "Failed to cancel order.";
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
+    }
+  }
+);
+
 const orderSlice = createSlice({
   name: "order",
   initialState: {
@@ -44,7 +62,7 @@ const orderSlice = createSlice({
     placingOrder: false,
     finalPrice: null,
     orderStep: 1,
-    currentOrder: null, // new: store full order for Razorpay
+    currentOrder: null, // store full order for Razorpay
   },
   reducers: {
     toggleOrderStep(state) {
@@ -66,17 +84,15 @@ const orderSlice = createSlice({
       .addCase(placeOrder.pending, (state) => {
         state.placingOrder = true;
       })
- .addCase(placeOrder.fulfilled, (state, action) => {
-  state.placingOrder = false;
-  state.finalPrice = action.payload.total_price;
-  state.currentOrder = {
-    _id: action.payload.order_id,   // ✅ matches backend
-    total_price: action.payload.total_price,
-  };
-  state.orderStep = 2;
-})
-
-
+      .addCase(placeOrder.fulfilled, (state, action) => {
+        state.placingOrder = false;
+        state.finalPrice = action.payload.total_price;
+        state.currentOrder = {
+          _id: action.payload.order_id,
+          total_price: action.payload.total_price,
+        };
+        state.orderStep = 2;
+      })
       .addCase(placeOrder.rejected, (state) => {
         state.placingOrder = false;
       });

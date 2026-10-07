@@ -2,6 +2,12 @@ import ErrorHandler from "../middlewares/errorMiddlewares.js";
 import { catchAsyncErrors } from "../middlewares/catchAsyncError.js";
 import database from "../database/db.js";
 import { generatePaymentIntent } from "../utils/generatePaymentIntent.js";
+import Razorpay from "razorpay";
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
 
 export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
     console.log("🧾 Incoming order data:", req.body);
@@ -46,7 +52,8 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
   const values = [];
   const placeholders = [];
 
-  items.forEach((item, index) => {
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
     const product = products.find((p) => p.id === item.product.id);
 
     if (!product) {
@@ -83,7 +90,7 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
         offset + 5
       }, $${offset + 6})`
     );
-  });
+  }
 
   const tax_price = 0.18;
   const shipping_price = total_price >= 50 ? 0 : 2;
@@ -302,3 +309,77 @@ export const deleteOrder = catchAsyncErrors(async (req, res, next) => {
     order: results.rows[0],
   });
 });
+
+export const cancelOrder = catchAsyncErrors(async (req, res, next) => {
+  const { orderId } = req.params;
+
+  const results = await database.query(
+    `SELECT * FROM orders WHERE id = $1 AND buyer_id = $2`,
+    [orderId, req.user.id]
+  );
+
+  if (results.rows.length === 0) {
+    return next(new ErrorHandler("Order not found or unauthorized.", 404));
+  }
+
+  const order = results.rows[0];
+
+  if (order.order_status !== "Processing") {
+    return next(
+      new ErrorHandler(`Cannot cancel an order that is already ${order.order_status}.`, 400)
+    );
+  }
+
+  const updatedOrder = await database.query(
+    `UPDATE orders SET order_status = 'Cancelled' WHERE id = $1 RETURNING *`,
+    [orderId]
+  );
+
+  // ✅ Check if payment was made for this order and initiate Razorpay refund
+  let isRefundInitiated = false;
+  try {
+    const paymentResult = await database.query(
+      `SELECT * FROM payments WHERE order_id = $1`,
+      [orderId]
+    );
+
+    if (paymentResult.rows.length > 0) {
+      const payment = paymentResult.rows[0];
+      if (payment.payment_status === "Paid" && payment.payment_intent_id) {
+        // Fetch captured payments associated with this Razorpay order ID
+        const paymentsForOrder = await razorpay.orders.fetchPayments(
+          payment.payment_intent_id
+        );
+        const paidPayment =
+          paymentsForOrder?.items?.find((p) => p.status === "captured") ||
+          paymentsForOrder?.items?.[0];
+
+        if (paidPayment && paidPayment.id) {
+          await razorpay.payments.refund(paidPayment.id, {
+            amount: Math.round(order.total_price * 100),
+            notes: { reason: "Customer cancelled order" },
+          });
+
+          await database.query(
+            `UPDATE payments SET payment_status = 'Refunded' WHERE order_id = $1`,
+            [orderId]
+          );
+          isRefundInitiated = true;
+          console.log("✅ Razorpay refund initiated for order:", orderId);
+        }
+      }
+    }
+  } catch (refundErr) {
+    console.error("💥 Razorpay Refund Warning:", refundErr.message || refundErr);
+  }
+
+  res.status(200).json({
+    success: true,
+    message: isRefundInitiated
+      ? "Order cancelled and payment refund initiated via Razorpay."
+      : "Order cancelled successfully.",
+    order: updatedOrder.rows[0],
+    refundInitiated: isRefundInitiated,
+  });
+});
+
