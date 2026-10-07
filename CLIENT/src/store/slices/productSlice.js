@@ -115,9 +115,15 @@ const productSlice = createSlice({
     topRatedProducts: [],
     newProducts: [],
     aiSearching: false,
+    aiSearchQuery: "",
     isReviewDeleting: false,
     isPostingReview: false,
     error: null,
+  },
+  reducers: {
+    clearAISearch: (state) => {
+      state.aiSearchQuery = "";
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -207,8 +213,9 @@ const productSlice = createSlice({
       })
 
       // AI Product Search
-      .addCase(fetchProductWithAI.pending, (state) => {
+      .addCase(fetchProductWithAI.pending, (state, action) => {
         state.aiSearching = true;
+        state.aiSearchQuery = action.meta.arg || "";
       })
       .addCase(fetchProductWithAI.fulfilled, (state, action) => {
         state.aiSearching = false;
@@ -220,5 +227,7 @@ const productSlice = createSlice({
       });
   },
 });
+
+export const { clearAISearch } = productSlice.actions;
 
 export default productSlice.reducer;

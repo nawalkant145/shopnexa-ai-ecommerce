@@ -479,40 +479,51 @@ export const fetchAIFilteredProducts = catchAsyncErrors(
     };
 
     const keywords = filterKeywords(userPrompt);
-    // STEP 1: Basic SQL Filtering
-    const result = await database.query(
-      `
-        SELECT * FROM products
-        WHERE name ILIKE ANY($1)
-        OR description ILIKE ANY($1)
-        OR category ILIKE ANY($1)
-        LIMIT 200;     
-        `,
-      [keywords]
-    );
+    let filteredProducts = [];
 
-    const filteredProducts = result.rows;
+    if (keywords.length > 0) {
+      // STEP 1: Basic SQL Filtering
+      const result = await database.query(
+        `
+          SELECT * FROM products
+          WHERE name ILIKE ANY($1)
+          OR description ILIKE ANY($1)
+          OR category ILIKE ANY($1)
+          LIMIT 200;     
+          `,
+        [keywords]
+      );
+      filteredProducts = result.rows;
+    }
+
+    // Fallback: If keyword search found no products, pass recent products to AI for semantic filtering
+    if (filteredProducts.length === 0) {
+      const fallbackResult = await database.query(
+        `SELECT * FROM products ORDER BY created_at DESC LIMIT 100;`
+      );
+      filteredProducts = fallbackResult.rows;
+    }
 
     if (filteredProducts.length === 0) {
       return res.status(200).json({
         success: true,
-        message: "No products found matching your prompt.",
+        message: "No products available in the store.",
         products: [],
       });
     }
 
+
     // STEP 2: AI FILTERING
-    const { success, products } = await getAIRecommendation(
-      req,
-      res,
+    const aiResult = await getAIRecommendation(
       userPrompt,
       filteredProducts
     );
 
     res.status(200).json({
-      success: success,
-      message: "AI filtered products.",
-      products,
+      success: aiResult.success,
+      message: aiResult.message || "AI filtered products.",
+      products: aiResult.products || [],
     });
+
   }
 );

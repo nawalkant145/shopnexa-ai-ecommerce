@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Search, Sparkles } from "lucide-react";
 import axios from "axios";
 import { useDispatch, useSelector } from "react-redux";
@@ -6,9 +6,15 @@ import { fetchProductWithAI } from "../../store/slices/productSlice";
 import { toggleAIModal } from "../../store/slices/popupSlice";
 
 const AISearchModal = () => {
-  const [userPrompt,setUserPrompt] = useState("");
-  const {aiSearching} = useSelector((state) =>state.product);
-  const {isAIPopupOpen} = useSelector((state) => state.popup);
+  const { aiSearching, aiSearchQuery } = useSelector((state) => state.product);
+  const { isAIPopupOpen } = useSelector((state) => state.popup);
+  const [userPrompt, setUserPrompt] = useState(aiSearchQuery || "");
+
+  useEffect(() => {
+    if (aiSearchQuery) {
+      setUserPrompt(aiSearchQuery);
+    }
+  }, [aiSearchQuery]);
 
   const exampleText = [
     "Find the best suitable GPU with Ryzen 5600X",
