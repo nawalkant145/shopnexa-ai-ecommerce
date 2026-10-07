@@ -12,7 +12,6 @@ import productRouter from "./router/productRoutes.js";
 import adminRouter from "./router/adminRoutes.js";
 import orderRoutes from "./router/orderRoutes.js";
 import database from "./database/db.js";
-import paymentRouter from "./router/paymentRoutes.js";
 
 config({ path: "./config/config.env" });
 
@@ -51,11 +50,29 @@ app.post("/api/v1/payment/create", async (req, res) => {
         .json({ success: false, message: "Invalid order data" });
     }
 
+    // ✅ Check if payment record already exists for this order
+    const existingPayment = await database.query(
+      `SELECT * FROM payments WHERE order_id = $1`,
+      [orderId]
+    );
+
+    if (existingPayment.rows.length > 0) {
+      const intent = existingPayment.rows[0];
+      console.log("✅ Reusing existing Razorpay order:", intent.payment_intent_id);
+      return res.json({
+        success: true,
+        orderId: intent.payment_intent_id,
+        amount: Math.round(totalPrice * 100),
+        currency: "INR",
+        key: process.env.RAZORPAY_KEY_ID,
+      });
+    }
+
     // ✅ Razorpay requires receipt <= 40 chars
     const receipt = `order_${String(orderId).slice(0, 35)}`;
 
     const options = {
-      amount: totalPrice * 100, // convert to paise
+      amount: Math.round(totalPrice * 100), // convert to paise
       currency: "INR",
       receipt,
       payment_capture: 1,
@@ -63,10 +80,11 @@ app.post("/api/v1/payment/create", async (req, res) => {
 
     const order = await razorpay.orders.create(options);
 
-    // ✅ Save order to DB
+    // ✅ Save order to DB with conflict resolution
     await database.query(
       `INSERT INTO payments (order_id, payment_type, payment_status, payment_intent_id)
-       VALUES ($1, $2, $3, $4)`,
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (order_id) DO UPDATE SET payment_intent_id = EXCLUDED.payment_intent_id, payment_status = EXCLUDED.payment_status`,
       [orderId, "Online", "Pending", order.id]
     );
 
@@ -77,6 +95,7 @@ app.post("/api/v1/payment/create", async (req, res) => {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
+      key: process.env.RAZORPAY_KEY_ID,
     });
   } catch (error) {
     console.error("💥 Razorpay Payment Error:", error.message || error);
@@ -88,8 +107,9 @@ app.post("/api/v1/payment/create", async (req, res) => {
   }
 });
 
+
 // ✅ VERIFY PAYMENT (called by frontend after Razorpay success)
-app.post("/api/v1/payment/verify", express.json(), async (req, res) => {
+app.post("/api/v1/payment/verify", async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
       req.body;
@@ -100,10 +120,11 @@ app.post("/api/v1/payment/verify", express.json(), async (req, res) => {
       .update(sign.toString())
       .digest("hex");
 
-    if (expectedSign !== razorpay_signature)
+    if (expectedSign !== razorpay_signature) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid signature" });
+    }
 
     // ✅ Update payment record
     const updatedPaymentStatus = "Paid";
@@ -111,6 +132,12 @@ app.post("/api/v1/payment/verify", express.json(), async (req, res) => {
       `UPDATE payments SET payment_status=$1 WHERE payment_intent_id=$2 RETURNING *`,
       [updatedPaymentStatus, razorpay_order_id]
     );
+
+    if (paymentRes.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Payment record not found for order" });
+    }
 
     const orderId = paymentRes.rows[0].order_id;
 
@@ -135,16 +162,16 @@ app.post("/api/v1/payment/verify", express.json(), async (req, res) => {
     res.json({ success: true, message: "Payment verified" });
   } catch (error) {
     console.error("Verify error:", error.message);
-    res.status(500).json({ success: false });
+    res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 // ✅ Routers
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/product", productRouter);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/order", orderRoutes);
-app.use("/api/v1/payment", paymentRouter);
 
 
 // ✅ Table creation
