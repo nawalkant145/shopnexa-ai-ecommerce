@@ -112,13 +112,7 @@ export const fetchAllProducts = catchAsyncErrors(async (req, res, next) => {
     ? `WHERE ${conditions.join(" AND ")}`
     : "";
 
-  // Get count of filtered products
-  const totalProductsResult = await database.query(
-    `SELECT COUNT(*) FROM products p ${whereClause}`,
-    values
-  );
-
-  const totalProducts = parseInt(totalProductsResult.rows[0].count);
+  const countValues = [...values];
 
   paginationPlaceholders.limit = `$${index}`;
   values.push(limit);
@@ -141,8 +135,6 @@ export const fetchAllProducts = catchAsyncErrors(async (req, res, next) => {
     OFFSET ${paginationPlaceholders.offset}
     `;
 
-  const result = await database.query(query, values);
-
   // QUERY FOR FETCHING NEW PRODUCTS
   const newProductsQuery = `
     SELECT p.*,
@@ -154,7 +146,6 @@ export const fetchAllProducts = catchAsyncErrors(async (req, res, next) => {
     ORDER BY p.created_at DESC
     LIMIT 8
   `;
-  const newProductsResult = await database.query(newProductsQuery);
 
   // QUERY FOR FETCHING TOP RATING PRODUCTS (rating >= 4.5)
   const topRatedQuery = `
@@ -167,7 +158,17 @@ export const fetchAllProducts = catchAsyncErrors(async (req, res, next) => {
     ORDER BY p.ratings DESC, p.created_at DESC
     LIMIT 8
   `;
-  const topRatedResult = await database.query(topRatedQuery);
+
+  // ✅ Execute all 4 database queries concurrently via Promise.all to minimize latency
+  const [totalProductsResult, result, newProductsResult, topRatedResult] =
+    await Promise.all([
+      database.query(`SELECT COUNT(*) FROM products p ${whereClause}`, countValues),
+      database.query(query, values),
+      database.query(newProductsQuery),
+      database.query(topRatedQuery),
+    ]);
+
+  const totalProducts = parseInt(totalProductsResult.rows[0].count);
 
   res.status(200).json({
     success: true,
@@ -176,6 +177,7 @@ export const fetchAllProducts = catchAsyncErrors(async (req, res, next) => {
     newProducts: newProductsResult.rows,
     topRatedProducts: topRatedResult.rows,
   });
+
 });
 
 export const updateProduct = catchAsyncErrors(async (req, res, next) => {
