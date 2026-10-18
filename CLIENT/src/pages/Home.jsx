@@ -19,10 +19,10 @@ const Index = () => {
       <HeroSlider />
       <div className="container mx-auto px-4 pt-20">
         <CategoryGrid />
-        {newProducts.length > 0 && (
+        {Array.isArray(newProducts) && newProducts.length > 0 && (
           <ProductSlider title="New Arrivals" products={newProducts} />
         )}
-        {topRatedProducts.length > 0 && (
+        {Array.isArray(topRatedProducts) && topRatedProducts.length > 0 && (
           <ProductSlider
             title="Top Rated Products"
             products={topRatedProducts}

@@ -21,6 +21,9 @@ export const fetchAllProducts = createAsyncThunk(
       if (page) params.append("page", page);
 
       const res = await axiosInstance.get(`/product?${params.toString()}`);
+      if (!res.data || typeof res.data !== "object" || !Array.isArray(res.data.products)) {
+        return thunkAPI.rejectWithValue("Invalid API response format");
+      }
       return res.data;
     } catch (error) {
       return thunkAPI.rejectWithValue(
@@ -130,18 +133,19 @@ const productSlice = createSlice({
       // Fetch All Products
       .addCase(fetchAllProducts.pending, (state) => {
         state.loading = true;
-      
       })
       .addCase(fetchAllProducts.fulfilled, (state, action) => {
         state.loading = false;
-        state.products = action.payload.products;
-        state.newProducts = action.payload.newProducts;
-        state.topRatedProducts = action.payload.topRatedProducts;
-        state.totalProducts = action.payload.totalProducts;
+        state.products = Array.isArray(action.payload?.products) ? action.payload.products : [];
+        state.newProducts = Array.isArray(action.payload?.newProducts) ? action.payload.newProducts : [];
+        state.topRatedProducts = Array.isArray(action.payload?.topRatedProducts) ? action.payload.topRatedProducts : [];
+        state.totalProducts = action.payload?.totalProducts || 0;
       })
       .addCase(fetchAllProducts.rejected, (state) => {
         state.loading = false;
-        
+        state.products = state.products || [];
+        state.newProducts = state.newProducts || [];
+        state.topRatedProducts = state.topRatedProducts || [];
       })
 
       // Fetch Product Details

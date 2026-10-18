@@ -256,16 +256,13 @@ const Products = () => {
 
              {/**No result */}
 
-             {
-             products.length === 0
-&& (
+             {(!products || products.length === 0) && (
                 <div className="text-center py-12">
                   <p className="text-muted-foreground text-lg">
                     No products found matching your criteria. 
                   </p>
                 </div>
-              )
-             }
+              )}
           </div>
         </div>
       </div>
