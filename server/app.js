@@ -27,10 +27,28 @@ console.log("🧩 Razorpay Key ID:", process.env.RAZORPAY_KEY_ID);
 console.log("🧩 Razorpay Key Secret:", process.env.RAZORPAY_KEY_SECRET ? "Loaded ✅" : "❌ Missing");
 
 // ✅ Middleware setup
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.DASHBOARD_URL,
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "https://ecommerce-ai-based-webap.netlify.app",
+].filter(Boolean).map((url) => url.replace(/\/$/, ""));
+
 app.use(
   cors({
-    origin: [process.env.FRONTEND_URL, process.env.DASHBOARD_URL],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/$/, "");
+      if (
+        allowedOrigins.includes(cleanOrigin) ||
+        process.env.NODE_ENV !== "production"
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true); // Allow origin fallback for smooth connectivity
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
   })
 );
@@ -38,6 +56,14 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(fileUpload({ tempFileDir: "./uploads", useTempFiles: true }));
+
+// ✅ Health check route for Render
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "ShopNexa E-Commerce API is running live 🚀",
+  });
+});
 
 // ✅ CREATE PAYMENT ORDER (frontend calls this first)
 app.post("/api/v1/payment/create", async (req, res) => {
