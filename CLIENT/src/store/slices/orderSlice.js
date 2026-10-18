@@ -89,7 +89,10 @@ const orderSlice = createSlice({
         state.finalPrice = action.payload.total_price;
         state.currentOrder = {
           _id: action.payload.order_id,
+          order_id: action.payload.order_id,
           total_price: action.payload.total_price,
+          discount_amount: action.payload.discount_amount,
+          discount_details: action.payload.discount_details,
         };
         state.orderStep = 2;
       })

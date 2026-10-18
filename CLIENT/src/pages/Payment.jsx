@@ -1,27 +1,25 @@
-import { useState, useEffect } from "react";
-import { ArrowLeft, Check, Phone } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { ArrowLeft, Check, Phone, Tag, MapPin, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { Elements } from "@stripe/react-stripe-js";
 import PaymentForm from "../components/PaymentForm";
-import { loadStripe } from "@stripe/stripe-js";
 import { placeOrder } from "../store/slices/orderSlice";
+import { toggleAuthPopup } from "../store/slices/popupSlice";
+import { toast } from "react-toastify";
 
 const Payment = () => {
-
-  const { authUser } = useSelector((state) => state.auth);
-  const navigateTo = useNavigate();
-  if (!authUser) return navigateTo("/products");
-
-  const [stripePromise, setStripePromise] = useState(null);
-  useEffect(() => {
-    loadStripe(
-      "Stripe_frontend_key"
-    )
-      .then((stripe) => setStripePromise(stripe))
-      .catch((err) => console.log(err));
-  }, []);
   const dispatch = useDispatch();
+  const { authUser, isCheckingAuth } = useSelector((state) => state.auth);
+  const navigateTo = useNavigate();
+
+  useEffect(() => {
+    if (!isCheckingAuth && !authUser) {
+      toast.info("Please login to proceed to checkout");
+      dispatch(toggleAuthPopup());
+      navigateTo("/products");
+    }
+  }, [authUser, isCheckingAuth, navigateTo, dispatch]);
+
   const { cart } = useSelector((state) => state.cart);
   const { orderStep } = useSelector((state) => state.order);
 
@@ -35,12 +33,93 @@ const Payment = () => {
     phone: "",
   });
 
+  const trimmedCity =
+    typeof shippingDetails.city === "string" && shippingDetails.city.trim().length > 0
+      ? shippingDetails.city.trim()
+      : "";
+  const normalizedCity = trimmedCity.toLowerCase();
 
-  const total = cart.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
-  const totalWithTax = total + total * 0.18 + (total > 50 ? 0 : 2);
+  const {
+    rawSubtotal,
+    totalLocationDiscount,
+    discountedSubtotal,
+    tax,
+    shipping,
+    finalTotal,
+    processedCart,
+    availableDiscountCities,
+  } = useMemo(() => {
+    let rawSub = 0;
+    let totalDiscount = 0;
+    let discSub = 0;
+
+    const processed = cart.map((item) => {
+      const unitPrice = Number(item.product?.price) || 0;
+      const itemQty = item.quantity || 1;
+      const ruleCity = item.product?.discount_city ? item.product.discount_city.trim() : null;
+      const rulePercent = Number(item.product?.discount_percent) || 0;
+
+      const isMatch = !!(
+        normalizedCity &&
+        ruleCity &&
+        normalizedCity === ruleCity.toLowerCase() &&
+        rulePercent > 0
+      );
+
+      let unitDiscount = 0;
+      let finalUnitPrice = unitPrice;
+      let itemDiscount = 0;
+
+      if (isMatch) {
+        unitDiscount = parseFloat(((unitPrice * rulePercent) / 100).toFixed(2));
+        finalUnitPrice = Math.max(0, parseFloat((unitPrice - unitDiscount).toFixed(2)));
+        itemDiscount = parseFloat((unitDiscount * itemQty).toFixed(2));
+      }
+
+      rawSub += unitPrice * itemQty;
+      totalDiscount += itemDiscount;
+      discSub += finalUnitPrice * itemQty;
+
+      return {
+        ...item,
+        unitPrice,
+        isMatch,
+        ruleCity,
+        rulePercent,
+        unitDiscount,
+        finalUnitPrice,
+        itemDiscount,
+        lineTotal: finalUnitPrice * itemQty,
+        originalLineTotal: unitPrice * itemQty,
+      };
+    });
+
+    const taxAmount = parseFloat((discSub * 0.18).toFixed(2));
+    const shippingFee = discSub >= 50 || discSub === 0 ? 0 : 2;
+    const totalWithAll = Math.round(discSub + taxAmount + shippingFee);
+
+    const discountCities = [
+      ...new Set(
+        cart
+          .filter(
+            (i) =>
+              i.product?.discount_city && Number(i.product?.discount_percent) > 0
+          )
+          .map((i) => i.product.discount_city.trim())
+      ),
+    ];
+
+    return {
+      rawSubtotal: rawSub,
+      totalLocationDiscount: totalDiscount,
+      discountedSubtotal: discSub,
+      tax: taxAmount,
+      shipping: shippingFee,
+      finalTotal: totalWithAll,
+      processedCart: processed,
+      availableDiscountCities: discountCities,
+    };
+  }, [cart, normalizedCity]);
 
   // ✅ Properly defined event handler
   const handlePlaceOrder = (e) => {
@@ -62,37 +141,17 @@ const Payment = () => {
   };
 
 
-  //   const handlePlaceOrder = (e) => {
-  //   e.preventDefault();
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen pt-20 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
-  //   // ✅ Build shipping info and order data
-  //   const orderData = {
-  //     shippingInfo: {
-  //       full_name: shippingDetails.full_name,
-  //       state: shippingDetails.state,
-  //       city: shippingDetails.city,
-  //       country: shippingDetails.country,
-  //       address: shippingDetails.address,
-  //       pinCode: shippingDetails.pincode,
-  //       phone: shippingDetails.phone,
-  //     },
-  //     orderItems: cart.map((item) => ({
-  //       name: item.product.name,
-  //       price: item.product.price,
-  //       quantity: item.quantity,
-  //       image: item.product.images[0].url,
-  //       product: item.product._id || item.product.id, // depends on backend
-  //     })),
-  //     itemsPrice: total,
-  //     taxPrice: total * 0.18,
-  //     shippingPrice: total > 50 ? 0 : 2,
-  //     totalPrice: totalWithTax,
-  //   };
-
-  //   // ✅ Dispatch Redux action
-  //   dispatch(placeOrder(orderData));
-  // };
-
+  if (!authUser) {
+    return null;
+  }
 
   if (cart.length === 0) {
     return (
@@ -287,17 +346,31 @@ const Payment = () => {
                       <input
                         type="text"
                         required
+                        placeholder="e.g., Delhi, Mumbai"
                         value={shippingDetails.city}
                         onChange={(e) => {
                           setShippingDetails({
                             ...shippingDetails,
                             city: e.target.value,
-
                           });
-
                         }}
                         className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-foreground"
                       />
+                      {totalLocationDiscount > 0 ? (
+                        <p className="text-xs text-emerald-400 font-medium mt-1.5 flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                          <span>
+                            Location discount applied for <strong>{trimmedCity}</strong>! (Saved ${totalLocationDiscount.toFixed(2)})
+                          </span>
+                        </p>
+                      ) : availableDiscountCities.length > 0 ? (
+                        <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                          <Tag className="w-3 h-3 text-primary flex-shrink-0" />
+                          <span>
+                            Special discount available for: <strong>{availableDiscountCities.join(", ")}</strong>
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
 
                     <div>
@@ -338,8 +411,6 @@ const Payment = () => {
                         <option value="India">India</option>
                       </select>
 
-
-
                     </div>
 
                   </div>
@@ -352,17 +423,10 @@ const Payment = () => {
                     Continue to Payment
                   </button>
 
-
-
                 </form>
 
               ) : (
-                <>
-                  <Elements stripe={stripePromise}>
-                    <PaymentForm />
-
-                  </Elements>
-                </>
+                <PaymentForm />
               )}
             </div>
             {/**ORDER SUMMARY */}
@@ -371,54 +435,85 @@ const Payment = () => {
                 <h2 className="text-xl font-semibold text-foreground">
                   Order Summary
                 </h2>
-                <div className="space-y-4 mb-6">
-                  {cart.map((item) => {
+                <div className="space-y-4 mb-6 max-h-72 overflow-y-auto pr-1">
+                  {processedCart.map((item) => {
                     return (
                       <div
                         key={item.product.id}
                         className="flex items-center space-x-3"
                       >
                         <img
-                          src={item.product.images[0].url}
+                          src={item.product.images?.[0]?.url || "/placeholder.png"}
                           alt={item.product.name}
-                          className="w-12 h-12 object-cover rounded"
-
+                          className="w-12 h-12 object-cover rounded-lg flex-shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate" > {item.product.name}</p>
-                          <p className="text-xs text-muted-foreground ">Qty :{item.quantity}</p>
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {item.product.name}
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            <span className="text-xs text-muted-foreground">Qty: {item.quantity}</span>
+                            {item.isMatch && (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-500/20 text-emerald-400 font-semibold px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                <Tag className="w-2.5 h-2.5" />
+                                {item.rulePercent}% OFF ({item.ruleCity})
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-sm font-semibold">
-                          ${Number(item.product.price) * item.quantity}
-
-                        </p>
+                        <div className="text-right">
+                          {item.isMatch ? (
+                            <div>
+                              <p className="text-xs line-through text-muted-foreground">
+                                ${item.originalLineTotal.toFixed(2)}
+                              </p>
+                              <p className="text-sm font-bold text-emerald-400">
+                                ${item.lineTotal.toFixed(2)}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-sm font-semibold text-foreground">
+                              ${item.originalLineTotal.toFixed(2)}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
 
                 <div className="space-y-2 border-t border-[hsla(var(--glass-border))] pt-4">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span>${total.toFixed(2)}</span>
-
+                    <span className="text-foreground">${rawSubtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Shipping</span>
-                    <span className="text-green-500">
-                      {totalWithTax >= 50 ? "Free" : "$2"}
 
+                  {totalLocationDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-emerald-400 font-medium">
+                      <span className="flex items-center gap-1">
+                        <Tag className="w-3.5 h-3.5" />
+                        Location Discount ({trimmedCity})
+                      </span>
+                      <span>-${totalLocationDiscount.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Shipping</span>
+                    <span className={shipping === 0 ? "text-emerald-400 font-medium" : "text-foreground"}>
+                      {shipping === 0 ? "Free" : "$2.00"}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tax</span>
-                    <span>{(total * 0.18).toFixed(2)}</span>
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tax (18%)</span>
+                    <span className="text-foreground">${tax.toFixed(2)}</span>
                   </div>
+
                   <div className="flex justify-between font-semibold text-lg pt-2 border-t border-[hsla(var(--glass-border))]">
                     <span>Total</span>
-                    <span className="text-primary">
-                      ${totalWithTax.toFixed(2)}
-
+                    <span className="text-primary font-bold">
+                      ${finalTotal.toFixed(2)}
                     </span>
                   </div>
                 </div>

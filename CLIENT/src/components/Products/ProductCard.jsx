@@ -43,6 +43,14 @@ const ProductCard = ({ product }) => {
               </span>
             )
           }
+
+          {
+            product.discount_city && Number(product.discount_percent) > 0 && (
+              <span className="px-2 py-1 bg-emerald-500/90 text-white text-xs font-semibold rounded flex items-center gap-1 shadow-sm">
+                🏷️ {parseFloat(product.discount_percent)}% OFF in {product.discount_city}
+              </span>
+            )
+          }
         </div>
 
         {/**QUICK ADD TO CART */}
@@ -84,8 +92,13 @@ const ProductCard = ({ product }) => {
         {/**PRODUCT PRICE */}
         <div className="flex items-center space-x-2">
           <span className="text-xl font-bold text-primary">
-            ${product.price}
+            ${Number(product.price).toFixed(2)}
           </span>
+          {product.discount_city && Number(product.discount_percent) > 0 && (
+            <span className="text-xs text-emerald-400 font-medium">
+              ({parseFloat(product.discount_percent)}% off in {product.discount_city})
+            </span>
+          )}
         </div>
 
         {/**PRODUCT AVAILABILITY */}

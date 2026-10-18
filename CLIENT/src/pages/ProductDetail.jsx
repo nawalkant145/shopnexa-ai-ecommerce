@@ -14,12 +14,14 @@ import { useDispatch, useSelector } from "react-redux";
 import ReviewsContainer from "../components/Products/ReviewsContainer";
 import { addToCart } from "../store/slices/cartSlice";
 import { fetchProductDetails } from "../store/slices/productSlice";
+import { toggleAuthPopup } from "../store/slices/popupSlice";
 import { toast } from "react-toastify";
 
 const ProductDetail = () => {
   const { id } = useParams();
   const dispatch = useDispatch();
   const product = useSelector((state) => state.product?.productDetails);
+  const { authUser } = useSelector((state) => state.auth);
 
   const { loading, productReviews } = useSelector((state) => state.product);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -44,9 +46,14 @@ const ProductDetail = () => {
   const navigateTo = useNavigate();
 
   const handleBuyNow = () => {
-    dispatch(addToCart({product,quantity}));
-    navigateTo("/payment")
-  }
+    dispatch(addToCart({ product, quantity }));
+    if (!authUser) {
+      toast.info("Please sign in to proceed to checkout");
+      dispatch(toggleAuthPopup());
+      return;
+    }
+    navigateTo("/payment");
+  };
 
   useEffect(() => {
     dispatch(fetchProductDetails(id));
@@ -135,6 +142,12 @@ const ProductDetail = () => {
                       </span>
                     )
                   }
+
+                  {product.discount_city && Number(product.discount_percent) > 0 && (
+                    <span className="px-2 py-1 bg-emerald-500/90 text-white text-xs font-semibold rounded flex items-center gap-1 shadow-sm">
+                      🏷️ {parseFloat(product.discount_percent)}% OFF for orders to {product.discount_city}
+                    </span>
+                  )}
                 </div>
                 <h1 className="text-3xl font-bold text-foreground mb-2">
                   {product.name}

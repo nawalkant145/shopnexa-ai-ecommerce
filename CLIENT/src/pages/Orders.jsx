@@ -350,8 +350,13 @@ const Orders = () => {
                           {item.title}
                         </h4>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Quantity: {item.quantity} × ${item.price}
+                          Quantity: {item.quantity} × ${Number(item.price).toFixed(2)}
                         </p>
+                        {Number(item.discount_amount) > 0 && (
+                          <p className="text-[10px] text-emerald-400 font-medium mt-0.5">
+                            🏷️ Location discount saved ${Number(item.discount_amount).toFixed(2)}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-foreground">
@@ -363,18 +368,48 @@ const Orders = () => {
                 </div>
               </div>
 
+              {/* Location Discount Section */}
+              {Number(selectedOrder.discount_amount) > 0 && (
+                <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
+                    <span>🏷️</span>
+                    <span>Location Discount Applied</span>
+                    <span className="ml-auto font-bold">-${Number(selectedOrder.discount_amount).toFixed(2)}</span>
+                  </div>
+                  {Array.isArray(selectedOrder.discount_details) &&
+                    selectedOrder.discount_details.map((d, idx) => (
+                      <p key={idx} className="text-xs text-muted-foreground pl-6">
+                        {d.explanation}
+                      </p>
+                    ))}
+                </div>
+              )}
+
               {/* Cost Summary */}
               <div className="glass-card p-4 rounded-xl space-y-2 border border-border/60">
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Subtotal</span>
+                  <span>Subtotal (before discount)</span>
                   <span>
-                    $
-                    {(
-                      selectedOrder.total_price -
-                      (selectedOrder.shipping_price || 0)
+                    ${(
+                      Number(selectedOrder.total_price) +
+                      Number(selectedOrder.discount_amount || 0) -
+                      Number(selectedOrder.shipping_price || 0) -
+                      Number(selectedOrder.tax_price || 0)
                     ).toFixed(2)}
                   </span>
                 </div>
+                {Number(selectedOrder.discount_amount) > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-400 font-medium">
+                    <span>🏷️ Location Discount ({selectedOrder.shipping_info?.city})</span>
+                    <span>-${Number(selectedOrder.discount_amount).toFixed(2)}</span>
+                  </div>
+                )}
+                {Number(selectedOrder.tax_price) > 0 && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Tax (18%)</span>
+                    <span>${Number(selectedOrder.tax_price).toFixed(2)}</span>
+                  </div>
+                )}
                 {selectedOrder.shipping_price > 0 && (
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Shipping Fee</span>
