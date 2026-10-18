@@ -58,6 +58,13 @@ const ViewProductModal = ({ product }) => {
                 <strong>Created At:</strong>{" "}
                 {new Date(selectedProduct.created_at).toLocaleDateString()}
               </p>
+              {selectedProduct.discount_city && Number(selectedProduct.discount_percent) > 0 ? (
+                <p className="mt-2 text-emerald-600 font-semibold">
+                  🏷️ Location Discount: <strong>{selectedProduct.discount_percent}%</strong> OFF for orders to <strong>{selectedProduct.discount_city}</strong>
+                </p>
+              ) : (
+                <p className="text-gray-400 text-sm mt-2">No location discount configured.</p>
+              )}
             </div>
           </div>
         </div>

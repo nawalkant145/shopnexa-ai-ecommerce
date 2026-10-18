@@ -16,6 +16,8 @@ const CreateProductModal = () => {
     category: "Electronics",
     stock: "",
     images: [],
+    discount_city: "",
+    discount_percent: "",
   });
 
   const categoryOptions = [
@@ -37,6 +39,8 @@ const CreateProductModal = () => {
     data.append("price", formData.price);
     data.append("category", formData.category);
     data.append("stock", formData.stock);
+    if (formData.discount_city) data.append("discount_city", formData.discount_city);
+    if (formData.discount_percent) data.append("discount_percent", formData.discount_percent);
 
     for (let i = 0; i < formData.images.length; i++) {
       data.append("images", formData.images[i]);
@@ -126,6 +130,34 @@ const CreateProductModal = () => {
               }
               className="border px-4 py-2 rounded col-span-1 md:col-span-2"
             />
+
+            {/* Location Discount Fields */}
+            <div className="col-span-1 md:col-span-2">
+              <p className="text-sm font-semibold text-gray-600 mb-2">📍 Location Discount (Optional)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  placeholder="Discount City (e.g., Delhi)"
+                  value={formData.discount_city}
+                  onChange={(e) =>
+                    setFormData({ ...formData, discount_city: e.target.value })
+                  }
+                  className="border px-4 py-2 rounded"
+                />
+                <input
+                  type="number"
+                  placeholder="Discount % (e.g., 10)"
+                  min="0"
+                  max="100"
+                  value={formData.discount_percent}
+                  onChange={(e) =>
+                    setFormData({ ...formData, discount_percent: e.target.value })
+                  }
+                  className="border px-4 py-2 rounded"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Customers shipping to this city get the specified % discount.</p>
+            </div>
 
             <textarea
               placeholder="Description"
