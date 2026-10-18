@@ -26,6 +26,21 @@ export const createDatabaseIndexes = async () => {
   }
 };
 
+export const upgradeSchemaForLocationDiscounts = async () => {
+  try {
+    await database.query(`
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_city VARCHAR(100) DEFAULT NULL;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS discount_percent DECIMAL(5,2) DEFAULT 0;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) DEFAULT 0;
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_details JSONB DEFAULT '[]'::JSONB;
+      ALTER TABLE order_items ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) DEFAULT 0;
+    `);
+    console.log("⚡ Location discount columns verified.");
+  } catch (error) {
+    console.warn("Schema upgrade warning:", error.message);
+  }
+};
+
 export const createTables = async () => {
   try {
     await createUserTable();
@@ -35,6 +50,7 @@ export const createTables = async () => {
     await createOrderItemTable();
     await createShippingInfoTable();
     await createPaymentsTable();
+    await upgradeSchemaForLocationDiscounts();
     await createDatabaseIndexes();
     console.log("All Tables & Indexes Created Successfully.");
   } catch (error) {

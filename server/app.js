@@ -44,10 +44,23 @@ app.post("/api/v1/payment/create", async (req, res) => {
   try {
     const { orderId, totalPrice } = req.body;
 
-    if (!orderId || !totalPrice) {
+    if (!orderId || totalPrice === undefined || totalPrice === null) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid order data" });
+    }
+
+    const numericTotal = Number(totalPrice) || 0;
+
+    // ✅ Free order (100% discount or 0 total) - no payment gateway required
+    if (numericTotal <= 0) {
+      return res.json({
+        success: true,
+        orderId: `free_${orderId}`,
+        amount: 0,
+        currency: "INR",
+        isFree: true,
+      });
     }
 
     // ✅ Check if payment record already exists for this order
@@ -56,23 +69,36 @@ app.post("/api/v1/payment/create", async (req, res) => {
       [orderId]
     );
 
+    const amountInPaise = Math.max(100, Math.round(numericTotal * 100));
+
     if (existingPayment.rows.length > 0) {
       const intent = existingPayment.rows[0];
-      console.log("✅ Reusing existing Razorpay order:", intent.payment_intent_id);
+      console.log("✅ Reusing existing payment record:", intent.payment_intent_id);
+
+      if (intent.payment_status === "Paid" || intent.payment_intent_id?.startsWith("free_")) {
+        return res.json({
+          success: true,
+          orderId: intent.payment_intent_id,
+          amount: 0,
+          currency: "INR",
+          isFree: true,
+        });
+      }
+
       return res.json({
         success: true,
         orderId: intent.payment_intent_id,
-        amount: Math.round(totalPrice * 100),
+        amount: amountInPaise,
         currency: "INR",
         key: process.env.RAZORPAY_KEY_ID,
       });
     }
 
     // ✅ Razorpay requires receipt <= 40 chars
-    const receipt = `order_${String(orderId).slice(0, 35)}`;
+    const receipt = `order_${String(orderId).slice(0, 34)}`;
 
     const options = {
-      amount: Math.round(totalPrice * 100), // convert to paise
+      amount: amountInPaise, // at least 100 paise (₹1.00)
       currency: "INR",
       receipt,
       payment_capture: 1,

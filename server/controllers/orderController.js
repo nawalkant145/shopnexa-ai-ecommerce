@@ -44,11 +44,20 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
   }
   const productIds = items.map((item) => item.product.id);
   const { rows: products } = await database.query(
-    `SELECT id, price, stock, name FROM products WHERE id = ANY($1::uuid[])`,
+    `SELECT id, price, stock, name, discount_city, discount_percent FROM products WHERE id = ANY($1::uuid[])`,
     [productIds]
   );
 
-  let total_price = 0;
+  const customerCity =
+    typeof city === "string" && city.trim().length > 0
+      ? city.trim().toLowerCase()
+      : null;
+
+  let raw_subtotal = 0;
+  let total_discount = 0;
+  let discounted_subtotal = 0;
+  const appliedDiscounts = [];
+
   const values = [];
   const placeholders = [];
 
@@ -71,47 +80,91 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
       );
     }
 
-    const itemTotal = product.price * item.quantity;
-    total_price += itemTotal;
+    const unitPrice = Number(product.price) || 0;
+    const ruleCity = product.discount_city ? product.discount_city.trim().toLowerCase() : null;
+    const ruleDiscountPercent = Number(product.discount_percent) || 0;
+
+    // Location discount rule applies only if customer shipping city matches product discount_city
+    const isDiscountApplicable =
+      customerCity &&
+      ruleCity &&
+      customerCity === ruleCity &&
+      ruleDiscountPercent > 0;
+
+    let finalUnitPrice = unitPrice;
+    let itemDiscountAmount = 0;
+
+    if (isDiscountApplicable) {
+      const unitDiscount = parseFloat(((unitPrice * ruleDiscountPercent) / 100).toFixed(2));
+      finalUnitPrice = Math.max(0, parseFloat((unitPrice - unitDiscount).toFixed(2)));
+      itemDiscountAmount = parseFloat((unitDiscount * item.quantity).toFixed(2));
+
+      appliedDiscounts.push({
+        product_id: product.id,
+        product_name: product.name,
+        target_city: product.discount_city.trim(),
+        matched_city: city.trim(),
+        discount_percent: ruleDiscountPercent,
+        unit_discount: unitDiscount,
+        original_price: unitPrice,
+        discounted_price: finalUnitPrice,
+        quantity: item.quantity,
+        total_discount: itemDiscountAmount,
+        explanation: `${ruleDiscountPercent}% location discount applied for shipping to ${product.discount_city.trim()} (Saved $${itemDiscountAmount.toFixed(2)})`,
+      });
+    }
+
+    raw_subtotal += unitPrice * item.quantity;
+    total_discount += itemDiscountAmount;
+    discounted_subtotal += finalUnitPrice * item.quantity;
 
     values.push(
       null,
       product.id,
       item.quantity,
-      product.price,
-      item.product.images[0].url || "",
+      finalUnitPrice,
+      itemDiscountAmount,
+      item.product.images?.[0]?.url || "",
       product.name
     );
 
-    const offset = index * 6;
+    const offset = index * 7;
 
     placeholders.push(
       `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${
         offset + 5
-      }, $${offset + 6})`
+      }, $${offset + 6}, $${offset + 7})`
     );
   }
 
-  const tax_price = 0.18;
-  const shipping_price = total_price >= 50 ? 0 : 2;
-  total_price = Math.round(
-    total_price + total_price * tax_price + shipping_price
+  const tax_rate = 0.18;
+  const shipping_price = discounted_subtotal >= 50 || discounted_subtotal === 0 ? 0 : 2;
+  const tax_price = parseFloat((discounted_subtotal * tax_rate).toFixed(2));
+  const total_price = Math.round(
+    discounted_subtotal + tax_price + shipping_price
   );
 
   const orderResult = await database.query(
-    `INSERT INTO orders (buyer_id, total_price, tax_price, shipping_price) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [req.user.id, total_price, tax_price, shipping_price]
+    `INSERT INTO orders (buyer_id, total_price, tax_price, shipping_price, discount_amount, discount_details) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [
+      req.user.id,
+      total_price,
+      tax_price,
+      shipping_price,
+      total_discount,
+      JSON.stringify(appliedDiscounts),
+    ]
   );
 
   const orderId = orderResult.rows[0].id;
 
-  for (let i = 0; i < values.length; i += 6) {
+  for (let i = 0; i < values.length; i += 7) {
     values[i] = orderId;
   }
 
   await database.query(
     `
-    INSERT INTO order_items (order_id, product_id, quantity, price, image, title)
+    INSERT INTO order_items (order_id, product_id, quantity, price, discount_amount, image, title)
     VALUES ${placeholders.join(", ")} RETURNING *
     `,
     values
@@ -132,11 +185,14 @@ export const placeNewOrder = catchAsyncErrors(async (req, res, next) => {
   }
 
   res.status(200).json({
-  success: true,
-  message: "Order placed successfully. Please proceed to payment.",
-  order_id: orderId, // ✅ your UUID from Postgres
-  total_price,
-});
+    success: true,
+    message: "Order placed successfully. Please proceed to payment.",
+    order_id: orderId,
+    total_price,
+    discount_amount: total_discount,
+    discount_details: appliedDiscounts,
+  });
+
 
 });
 
@@ -153,7 +209,10 @@ json_build_object(
 'order_id', oi.order_id,
 'product_id', oi.product_id,
 'quantity', oi.quantity,
-'price', oi.price
+'price', oi.price,
+'discount_amount', oi.discount_amount,
+'image', oi.image,
+'title', oi.title
  )
  ) FILTER (WHERE oi.id IS NOT NULL), '[]'
  ) AS order_items,
@@ -194,6 +253,7 @@ export const fetchMyOrders = catchAsyncErrors(async (req, res, next) => {
  'product_id', oi.product_id,
  'quantity', oi.quantity,
  'price', oi.price,
+ 'discount_amount', oi.discount_amount,
  'image', oi.image,
  'title', oi.title
   ) 
@@ -234,6 +294,7 @@ export const fetchAllOrders = catchAsyncErrors(async (req, res, next) => {
  'product_id', oi.product_id,
  'quantity', oi.quantity,
  'price', oi.price,
+ 'discount_amount', oi.discount_amount,
  'image', oi.image,
  'title', oi.title
 )
@@ -248,6 +309,7 @@ export const fetchAllOrders = catchAsyncErrors(async (req, res, next) => {
 ) AS shipping_info
 FROM orders o
 LEFT JOIN order_items oi ON o.id = oi.order_id
+
 LEFT JOIN shipping_info s ON o.id = s.order_id
 WHERE o.paid_at IS NOT NULL
 GROUP BY o.id, s.id
