@@ -150,13 +150,12 @@ const Cart = () => {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Shipping</span>
                   <span className="font-semibold text-green-500">
-                    {total >= 50 ? "Free" : "$2"}
-
+                    {total >= 50 || total === 0 ? "Free" : "$2.00"}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
+                  <span className="text-muted-foreground">Tax (18%)</span>
                   <span className="font-semibold">
                     ${(total * 0.18).toFixed(2)}
                   </span>
@@ -164,7 +163,9 @@ const Cart = () => {
                 <div className="border-t border-[hsla(var(--glass-border))] pt-4">
                   <div className="flex justify-between">
                     <span className="text-lg font-semibold">Total</span>
-                    <span>${(total + total * 0.18).toFixed(2)}</span>
+                    <span className="text-primary font-bold">
+                      ${(total + total * 0.18 + (total >= 50 || total === 0 ? 0 : 2)).toFixed(2)}
+                    </span>
                   </div>
                 </div>
               </div>

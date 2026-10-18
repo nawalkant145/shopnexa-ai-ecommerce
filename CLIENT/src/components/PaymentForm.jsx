@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { CreditCard, Lock } from "lucide-react";
@@ -14,6 +14,17 @@ const PaymentForm = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   console.log("🧾 Current Order Data:", currentOrder);
 
+  // Preload Razorpay checkout script on mount so it's instantly available on button click
+  useEffect(() => {
+    if (!window.Razorpay && !document.getElementById("razorpay-checkout-js")) {
+      const script = document.createElement("script");
+      script.id = "razorpay-checkout-js";
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
+
   const handlePayment = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
@@ -23,13 +34,13 @@ const PaymentForm = () => {
         currentOrder?._id || currentOrder?.order_id || currentOrder?.id;
       const totalPrice = currentOrder?.total_price;
 
-      if (!orderId || !totalPrice) {
+      if (!orderId || totalPrice === undefined || totalPrice === null) {
         toast.error("Invalid order details. Please try again.");
         setIsProcessing(false);
         return;
       }
 
-      console.log("🧾 Creating Razorpay order for amount:", totalPrice);
+      console.log("🧾 Processing payment for amount:", totalPrice);
 
       const res = await axiosInstance.post("/payment/create", {
         orderId,
@@ -41,6 +52,15 @@ const PaymentForm = () => {
 
       if (!data.success || !data.orderId) {
         throw new Error(data.message || "Payment initiation failed.");
+      }
+
+      // ✅ Free order (100% location discount or $0 total) - complete immediately
+      if (data.isFree || Number(totalPrice) <= 0) {
+        toast.success("Order placed successfully!");
+        dispatch(clearCart());
+        dispatch(toggleOrderStep());
+        navigateTo("/orders");
+        return;
       }
 
       const options = {
