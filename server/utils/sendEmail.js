@@ -7,7 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../config/config.env") });
 
-export const sendEmail = async ({ email, subject, message }) => {
+let cachedTransporter = null;
+
+const getTransporter = () => {
   const user = process.env.SMTP_MAIL;
   const pass = process.env.SMTP_PASSWORD;
 
@@ -15,16 +17,27 @@ export const sendEmail = async ({ email, subject, message }) => {
     throw new Error("SMTP credentials are not configured in environment variables.");
   }
 
-  const transporter = nodeMailer.createTransport({
-    service: process.env.SMTP_SERVICE || "gmail",
-    host: process.env.SMTP_HOST || "smtp.gmail.com",
-    port: Number(process.env.SMTP_PORT) || 465,
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: {
-      user,
-      pass,
-    },
-  });
+  if (!cachedTransporter) {
+    cachedTransporter = nodeMailer.createTransport({
+      service: process.env.SMTP_SERVICE || "gmail",
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: Number(process.env.SMTP_PORT) || 465,
+      secure: Number(process.env.SMTP_PORT) === 465,
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 50,
+      auth: {
+        user,
+        pass,
+      },
+    });
+  }
+  return cachedTransporter;
+};
+
+export const sendEmail = async ({ email, subject, message }) => {
+  const user = process.env.SMTP_MAIL;
+  const transporter = getTransporter();
 
   const mailOptions = {
     from: `"ShopNexa Support" <${user}>`,
