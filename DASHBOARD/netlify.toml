@@ -1,0 +1,18 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  VITE_API_URL = "https://shopnexa-backend-anep.onrender.com/api/v1"
+
+[[redirects]]
+  from = "/api/v1/*"
+  to = "https://shopnexa-backend-anep.onrender.com/api/v1/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
