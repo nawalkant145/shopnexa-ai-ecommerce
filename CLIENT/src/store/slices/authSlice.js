@@ -80,16 +80,20 @@ export const forgotPassword = createAsyncThunk(
   "auth/forgot/password",
   async (email, thunkAPI) => {
     try {
-      const res = await axiosInstance.post("/auth/password/forgot?frontendUrl=http://localhost:5173", email);
+      const frontendUrl =
+        typeof window !== "undefined" && window.location.origin
+          ? window.location.origin
+          : "http://localhost:5173";
+      const res = await axiosInstance.post(
+        `/auth/password/forgot?frontendUrl=${encodeURIComponent(frontendUrl)}`,
+        email
+      );
       toast.success(res.data.message);
-
       return null;
-
-
     } catch (error) {
-      toast.error(error.response.data.message);
-      return thunkAPI.rejectWithValue(error.response.data.message);
-
+      const msg = error.response?.data?.message || "Cannot request reset password.";
+      toast.error(msg);
+      return thunkAPI.rejectWithValue(msg);
     }
   }
 );

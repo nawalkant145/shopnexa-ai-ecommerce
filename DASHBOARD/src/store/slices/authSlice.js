@@ -112,15 +112,25 @@ export const logout = () => async (dispatch) => {
 export const forgotPassword = (email) => async (dispatch) => {
   dispatch(authSlice.actions.forgotPasswordRequest());
   try {
+    const frontendUrl =
+      typeof window !== "undefined" && window.location.origin
+        ? window.location.origin
+        : "http://localhost:5174";
+    const cleanEmail = typeof email === "string" ? email.trim() : email;
     const res = await axiosInstance.post(
-      "/auth/password/forgot?frontendUrl=http://localhost:5173",
-      { email }
+      `/auth/password/forgot?frontendUrl=${encodeURIComponent(frontendUrl)}`,
+      { email: cleanEmail }
     );
     dispatch(authSlice.actions.forgotPasswordSuccess());
-    toast.success(res.data.message);
+    toast.success(res.data.message || "Password reset link sent to your email!");
   } catch (error) {
     dispatch(authSlice.actions.forgotPasswordFailed());
-    toast.error(error.response?.data?.message || "Cannot request reset password.");
+    const errMsg =
+      error.response?.data?.message ||
+      (error.message === "Network Error"
+        ? "Network Error: Cannot connect to server."
+        : "Cannot request reset password.");
+    toast.error(errMsg);
   }
 };
 
@@ -129,10 +139,10 @@ export const resetPassword = (newData, token) => async (dispatch) => {
   try {
     const res = await axiosInstance.put(`/auth/password/reset/${token}`, newData);
     dispatch(authSlice.actions.resetPasswordSuccess(res.data.user));
-    toast.success(res.data.message);
+    toast.success(res.data.message || "Password reset successfully!");
   } catch (error) {
     dispatch(authSlice.actions.resetPasswordFailed());
-    toast.error(error.response?.data?.message || "Failed to reset password");
+    toast.error(error.response?.data?.message || "Failed to reset password.");
   }
 };
 

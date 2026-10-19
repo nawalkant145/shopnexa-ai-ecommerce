@@ -83,10 +83,19 @@ export const logout = catchAsyncErrors(async (req, res, next) => {
 
 export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
   const { email } = req.body;
-  const { frontendUrl } = req.query;
+  if (!email || !email.trim()) {
+    return next(new ErrorHandler("Please enter your email address.", 400));
+  }
+  const cleanEmail = email.trim();
+  const frontendUrl =
+    req.query.frontendUrl ||
+    process.env.DASHBOARD_URL ||
+    process.env.FRONTEND_URL ||
+    "http://localhost:5174";
+
   let userResult = await database.query(
-    `SELECT * FROM users WHERE email = $1`,
-    [email]
+    `SELECT * FROM users WHERE LOWER(TRIM(email)) = LOWER($1)`,
+    [cleanEmail]
   );
   if (userResult.rows.length === 0) {
     return next(new ErrorHandler("User not found with this email.", 404));
@@ -96,11 +105,12 @@ export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
     generateResetPasswordToken();
 
   await database.query(
-    `UPDATE users SET reset_password_token = $1, reset_password_expire = to_timestamp($2) WHERE email = $3`,
-    [hashedToken, resetPasswordExpireTime / 1000, email]
+    `UPDATE users SET reset_password_token = $1, reset_password_expire = to_timestamp($2) WHERE id = $3`,
+    [hashedToken, resetPasswordExpireTime / 1000, user.id]
   );
 
-  const resetPasswordUrl = `${frontendUrl}/password/reset/${resetToken}`;
+  const cleanFrontendUrl = frontendUrl.replace(/\/$/, "");
+  const resetPasswordUrl = `${cleanFrontendUrl}/password/reset/${resetToken}`;
 
   const message = generateEmailTemplate(resetPasswordUrl);
 
@@ -115,11 +125,12 @@ export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
       message: `Email sent to ${user.email} successfully.`,
     });
   } catch (error) {
+    console.error("sendEmail error:", error);
     await database.query(
-      `UPDATE users SET reset_password_token = NULL, reset_password_expire = NULL WHERE email = $1`,
-      [email]
+      `UPDATE users SET reset_password_token = NULL, reset_password_expire = NULL WHERE id = $1`,
+      [user.id]
     );
-    return next(new ErrorHandler("Email could not be sent.", 500));
+    return next(new ErrorHandler("Email could not be sent. Please verify SMTP settings.", 500));
   }
 });
 

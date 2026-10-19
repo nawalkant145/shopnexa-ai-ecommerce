@@ -1,6 +1,11 @@
 import axios from "axios";
 
+const getBaseURL = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  return "https://shopnexa-backend-anep.onrender.com/api/v1";
+};
+
 export const axiosInstance = axios.create({
-  baseURL: "http://localhost:4000/api/v1", // 👈 your backend URL
-  withCredentials: true, // important if using cookies
+  baseURL: getBaseURL(),
+  withCredentials: true,
 });
