@@ -62,6 +62,7 @@ app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
     message: "ShopNexa E-Commerce API is running live 🚀",
+    smtpConfigured: Boolean(process.env.SMTP_MAIL && process.env.SMTP_PASSWORD),
   });
 });
 
