@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, Navigate } from "react-router-dom";
 import { forgotPassword } from "../store/slices/authSlice";
-import { Mail, Send, Loader2, KeyRound, ArrowLeft } from "lucide-react";
+import { Mail, Send, Loader2, KeyRound, ArrowLeft, CheckCircle2, ExternalLink } from "lucide-react";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -15,7 +15,7 @@ const ForgotPassword = () => {
     setEmail("");
   };
 
-  const { user, isAuthenticated, loading } = useSelector((state) => state.auth);
+  const { user, isAuthenticated, loading, resetUrl } = useSelector((state) => state.auth);
   if (isAuthenticated && user?.role === "Admin") {
     return <Navigate to={"/"} />;
   }
@@ -98,6 +98,25 @@ const ForgotPassword = () => {
             )}
           </div>
         </form>
+
+        {resetUrl && (
+          <div className="mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2.5 animate-fadeIn">
+            <div className="flex items-center gap-2 text-emerald-800 font-semibold text-sm">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>Password Reset Link Ready</span>
+            </div>
+            <p className="text-xs text-emerald-700">
+              Your password recovery link is active. Click below to set your new password:
+            </p>
+            <a
+              href={resetUrl}
+              className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 px-4 rounded-lg text-sm shadow transition"
+            >
+              <span>Reset Password Now</span>
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ const authSlice = createSlice({
     loading: false,
     user: null,
     isAuthenticated: false,
+    resetUrl: null,
   },
   reducers: {
     loginRequest(state) { state.loading = true; },
@@ -36,11 +37,18 @@ const authSlice = createSlice({
       state.loading = false;
       state.user = null;
       state.isAuthenticated = false;
+      state.resetUrl = null;
     },
     logoutFailed(state) { state.loading = false; },
 
-    forgotPasswordRequest(state) { state.loading = true; },
-    forgotPasswordSuccess(state) { state.loading = false; },
+    forgotPasswordRequest(state) {
+      state.loading = true;
+      state.resetUrl = null;
+    },
+    forgotPasswordSuccess(state, action) {
+      state.loading = false;
+      state.resetUrl = action.payload || null;
+    },
     forgotPasswordFailed(state) { state.loading = false; },
 
     resetPasswordRequest(state) { state.loading = true; },
@@ -121,8 +129,12 @@ export const forgotPassword = (email) => async (dispatch) => {
       `/auth/password/forgot?frontendUrl=${encodeURIComponent(frontendUrl)}`,
       { email: cleanEmail }
     );
-    dispatch(authSlice.actions.forgotPasswordSuccess());
-    toast.success(res.data.message || "Password reset link sent to your email!");
+    dispatch(authSlice.actions.forgotPasswordSuccess(res.data.resetUrl || null));
+    if (res.data.resetUrl) {
+      toast.info("Password reset link ready! Click the on-screen button below.");
+    } else {
+      toast.success(res.data.message || "Password reset link sent to your email!");
+    }
   } catch (error) {
     dispatch(authSlice.actions.forgotPasswordFailed());
     const errMsg =

@@ -114,23 +114,30 @@ export const forgotPassword = catchAsyncErrors(async (req, res, next) => {
 
   const message = generateEmailTemplate(resetPasswordUrl);
 
+  console.log("==========================================");
+  console.log("🔗 PASSWORD RESET LINK:");
+  console.log(resetPasswordUrl);
+  console.log("==========================================");
+
   try {
     await sendEmail({
       email: user.email,
       subject: "Ecommerce Password Recovery",
       message,
     });
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: `Email sent to ${user.email} successfully.`,
     });
   } catch (error) {
-    console.error("sendEmail error:", error);
-    await database.query(
-      `UPDATE users SET reset_password_token = NULL, reset_password_expire = NULL WHERE id = $1`,
-      [user.id]
-    );
-    return next(new ErrorHandler("Email could not be sent. Please verify SMTP settings.", 500));
+    console.error("sendEmail failed (SMTP blocked on Render Free):", error.message);
+    // Keep reset token valid in database so admin can still reset password!
+    return res.status(200).json({
+      success: true,
+      emailSent: false,
+      message: "Password reset link generated! (Outbound SMTP is blocked on Render Free Tier).",
+      resetUrl: resetPasswordUrl,
+    });
   }
 });
 
